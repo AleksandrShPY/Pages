@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SpeedTest - Проверка скорости интернета</title>
+    <title>SpeedTest - Умная проверка скорости интернета</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -30,15 +30,27 @@
         }
         
         h1 {
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             font-weight: 300;
+        }
+        
+        .status-message {
+            background-color: rgba(255, 255, 255, 0.15);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
         }
         
         .speedometer {
             position: relative;
             width: 300px;
             height: 300px;
-            margin: 0 auto 30px;
+            margin: 0 auto 20px;
         }
         
         .dial {
@@ -84,7 +96,8 @@
         .results {
             display: flex;
             justify-content: space-around;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
         }
         
         .result-box {
@@ -92,6 +105,8 @@
             padding: 15px;
             border-radius: 10px;
             min-width: 120px;
+            margin: 5px;
+            flex-grow: 1;
         }
         
         .result-value {
@@ -105,6 +120,12 @@
             opacity: 0.8;
         }
         
+        .result-description {
+            font-size: 12px;
+            margin-top: 5px;
+            opacity: 0.7;
+        }
+        
         button {
             background-color: #4CAF50;
             color: white;
@@ -114,7 +135,7 @@
             border-radius: 50px;
             cursor: pointer;
             transition: all 0.3s;
-            margin-top: 20px;
+            margin-top: 15px;
         }
         
         button:hover {
@@ -128,12 +149,23 @@
             cursor: not-allowed;
         }
         
+        .progress-container {
+            width: 100%;
+            margin: 20px 0;
+        }
+        
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        
         .progress-bar {
             width: 100%;
             height: 10px;
             background-color: rgba(255, 255, 255, 0.2);
             border-radius: 5px;
-            margin: 20px 0;
             overflow: hidden;
         }
         
@@ -149,11 +181,30 @@
             font-size: 14px;
             opacity: 0.7;
         }
+        
+        .quality-indicator {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 10px;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .error-message {
+            color: #ff6b6b;
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: rgba(255, 0, 0, 0.1);
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Проверка скорости интернет-соединения</h1>
+        <h1>Умная проверка скорости интернета</h1>
+        
+        <div class="status-message" id="status-message">
+            Нажмите "Начать тест" для проверки скорости соединения
+        </div>
         
         <div class="speedometer">
             <div class="dial"></div>
@@ -162,165 +213,374 @@
         
         <div class="results">
             <div class="result-box">
-                <div class="result-value" id="download-speed">0</div>
+                <div class="result-value" id="download-speed">-</div>
                 <div class="result-label">Скачивание (Мбит/с)</div>
+                <div class="result-description" id="download-description">Скорость загрузки данных</div>
             </div>
             <div class="result-box">
-                <div class="result-value" id="upload-speed">0</div>
+                <div class="result-value" id="upload-speed">-</div>
                 <div class="result-label">Загрузка (Мбит/с)</div>
+                <div class="result-description" id="upload-description">Скорость отправки данных</div>
             </div>
             <div class="result-box">
-                <div class="result-value" id="ping-value">0</div>
+                <div class="result-value" id="ping-value">-</div>
                 <div class="result-label">Пинг (мс)</div>
+                <div class="result-description" id="ping-description">Задержка ответа сервера</div>
             </div>
         </div>
         
-        <div class="progress-bar">
-            <div class="progress" id="progress-bar"></div>
+        <div class="progress-container">
+            <div class="progress-info">
+                <span id="progress-status">Ожидание начала теста</span>
+                <span id="progress-percent">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress" id="progress-bar"></div>
+            </div>
         </div>
+        
+        <div class="quality-indicator" id="quality-indicator">
+            Качество соединения: <span id="quality-text">не определено</span>
+        </div>
+        
+        <div class="error-message" id="error-message" style="display: none;"></div>
         
         <button id="start-test">Начать тест</button>
         
         <div class="server-info">
-            Тестирование через: <span id="server-location">Москва, Россия</span>
+            Тестирование через: <span id="server-location">локальный сервер</span>
         </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const startButton = document.getElementById('start-test');
-            const downloadSpeedElement = document.getElementById('download-speed');
-            const uploadSpeedElement = document.getElementById('upload-speed');
-            const pingValueElement = document.getElementById('ping-value');
-            const needle = document.getElementById('needle');
-            const progressBar = document.getElementById('progress-bar');
-            
+            const elements = {
+                startButton: document.getElementById('start-test'),
+                statusMessage: document.getElementById('status-message'),
+                downloadSpeed: document.getElementById('download-speed'),
+                uploadSpeed: document.getElementById('upload-speed'),
+                pingValue: document.getElementById('ping-value'),
+                needle: document.getElementById('needle'),
+                progressBar: document.getElementById('progress-bar'),
+                progressStatus: document.getElementById('progress-status'),
+                progressPercent: document.getElementById('progress-percent'),
+                qualityIndicator: document.getElementById('quality-indicator'),
+                qualityText: document.getElementById('quality-text'),
+                errorMessage: document.getElementById('error-message'),
+                serverLocation: document.getElementById('server-location'),
+                downloadDescription: document.getElementById('download-description'),
+                uploadDescription: document.getElementById('upload-description'),
+                pingDescription: document.getElementById('ping-description')
+            };
+
             let testInProgress = false;
-            let downloadSpeed = 0;
-            let uploadSpeed = 0;
-            let ping = 0;
-            
-            // Функция для обновления стрелки спидометра
+            let testResults = {
+                download: 0,
+                upload: 0,
+                ping: 0
+            };
+
+            // Функции обновления интерфейса
+            function updateStatus(message, isError = false) {
+                elements.statusMessage.textContent = message;
+                elements.statusMessage.style.backgroundColor = isError 
+                    ? 'rgba(255, 0, 0, 0.2)' 
+                    : 'rgba(255, 255, 255, 0.15)';
+            }
+
+            function showError(message) {
+                elements.errorMessage.textContent = message;
+                elements.errorMessage.style.display = 'block';
+            }
+
+            function hideError() {
+                elements.errorMessage.style.display = 'none';
+            }
+
             function updateNeedle(speed) {
-                // Максимальная скорость на шкале - 100 Мбит/с
                 const maxSpeed = 100;
                 const rotation = Math.min(speed / maxSpeed * 180 - 90, 90);
-                needle.style.transform = `rotate(${rotation}deg)`;
+                elements.needle.style.transform = `rotate(${rotation}deg)`;
             }
-            
-            // Функция для тестирования ping
+
+            function updateProgress(percent, message) {
+                elements.progressBar.style.width = `${percent}%`;
+                elements.progressPercent.textContent = `${Math.round(percent)}%`;
+                elements.progressStatus.textContent = message;
+            }
+
+            function evaluateConnectionQuality() {
+                const { download, upload, ping } = testResults;
+                let quality = '';
+                let color = '';
+                
+                if (download < 5 || upload < 1 || ping > 200) {
+                    quality = 'Очень плохое';
+                    color = '#ff0000';
+                } else if (download < 20 || upload < 5 || ping > 100) {
+                    quality = 'Ниже среднего';
+                    color = '#ffaa00';
+                } else if (download < 50 || upload < 20 || ping > 50) {
+                    quality = 'Среднее';
+                    color = '#ffff00';
+                } else if (download < 100 || upload < 50) {
+                    quality = 'Хорошее';
+                    color = '#aaff00';
+                } else {
+                    quality = 'Отличное';
+                    color = '#00ff00';
+                }
+                
+                elements.qualityText.textContent = quality;
+                elements.qualityIndicator.style.borderLeft = `5px solid ${color}`;
+            }
+
+            // Функции тестирования
             async function testPing() {
-                const startTime = performance.now();
-                try {
-                    await fetch('https://httpbin.org/get?ping=test', {
-                        method: 'GET',
-                        cache: 'no-store',
-                        mode: 'no-cors'
-                    });
-                    const endTime = performance.now();
-                    ping = Math.round(endTime - startTime);
-                    pingValueElement.textContent = ping;
-                } catch (e) {
-                    pingValueElement.textContent = 'Ошибка';
-                }
-            }
-            
-            // Функция для тестирования скорости скачивания
-            async function testDownload() {
-                progressBar.style.width = '0%';
-                const testDataUrl = 'https://httpbin.org/bytes/1048576?download=test'; // 1MB файл
-                const startTime = performance.now();
-                let bytesReceived = 0;
+                updateStatus('Измерение ping: проверяем задержку до сервера...');
+                updateProgress(10, 'Измерение ping');
                 
-                try {
-                    const response = await fetch(testDataUrl, {
-                        cache: 'no-store',
-                        mode: 'no-cors'
-                    });
-                    const reader = response.body.getReader();
-                    
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
+                const testServers = [
+                    { name: "Google DNS", url: "https://dns.google/resolve?name=google.com&type=A" },
+                    { name: "Cloudflare", url: "https://1.1.1.1/cdn-cgi/trace" },
+                    { name: "Яндекс", url: "https://ya.ru" }
+                ];
+                
+                let bestPing = Infinity;
+                let bestServer = '';
+                
+                for (const server of testServers) {
+                    try {
+                        const startTime = performance.now();
+                        const response = await fetch(server.url, {
+                            method: 'GET',
+                            cache: 'no-store',
+                            mode: 'no-cors'
+                        });
+                        const endTime = performance.now();
+                        const currentPing = Math.round(endTime - startTime);
                         
-                        bytesReceived += value.length;
-                        const currentTime = performance.now();
-                        const elapsedTime = (currentTime - startTime) / 1000; // в секундах
-                        downloadSpeed = Math.round((bytesReceived * 8) / (elapsedTime * 1000000) * 10) / 10; // Мбит/с
+                        if (currentPing < bestPing) {
+                            bestPing = currentPing;
+                            bestServer = server.name;
+                        }
                         
-                        downloadSpeedElement.textContent = downloadSpeed;
-                        updateNeedle(downloadSpeed);
-                        progressBar.style.width = `${Math.min(bytesReceived / 1048576 * 100, 100)}%`;
+                        updateStatus(`Измерение ping: ${server.name} - ${currentPing} мс`);
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    } catch (e) {
+                        console.error(`Ping test failed for ${server.name}:`, e);
                     }
-                } catch (e) {
-                    downloadSpeedElement.textContent = 'Ошибка';
                 }
-            }
-            
-            // Функция для тестирования скорости загрузки
-            async function testUpload() {
-                progressBar.style.width = '0%';
-                const testData = new Uint8Array(1048576).fill(0); // 1MB данных
-                const startTime = performance.now();
-                let bytesSent = 0;
-                const chunkSize = 65536; // 64KB
                 
-                try {
-                    // Используем FormData для отправки данных
-                    const formData = new FormData();
-                    formData.append('upload', new Blob([testData]));
+                if (bestPing !== Infinity) {
+                    testResults.ping = bestPing;
+                    elements.pingValue.textContent = bestPing;
+                    elements.serverLocation.textContent = bestServer;
+                    elements.pingDescription.textContent = `Задержка до ${bestServer}`;
                     
-                    const xhr = new XMLHttpRequest();
-                    xhr.open('POST', 'https://httpbin.org/post', true);
+                    if (bestPing < 50) {
+                        elements.pingDescription.textContent += ' (Отлично)';
+                    } else if (bestPing < 100) {
+                        elements.pingDescription.textContent += ' (Хорошо)';
+                    } else if (bestPing < 200) {
+                        elements.pingDescription.textContent += ' (Удовлетворительно)';
+                    } else {
+                        elements.pingDescription.textContent += ' (Плохо)';
+                    }
                     
-                    return new Promise((resolve) => {
-                        xhr.upload.onprogress = (event) => {
-                            bytesSent = event.loaded;
-                            const currentTime = performance.now();
-                            const elapsedTime = (currentTime - startTime) / 1000; // в секундах
-                            uploadSpeed = Math.round((bytesSent * 8) / (elapsedTime * 1000000) * 10) / 10; // Мбит/с
-                            
-                            uploadSpeedElement.textContent = uploadSpeed;
-                            updateNeedle(uploadSpeed);
-                            progressBar.style.width = `${Math.min(bytesSent / 1048576 * 100, 100)}%`;
-                        };
-                        
-                        xhr.onload = () => resolve();
-                        xhr.send(formData);
-                    });
-                } catch (e) {
-                    uploadSpeedElement.textContent = 'Ошибка';
+                    return true;
+                } else {
+                    showError('Не удалось измерить ping. Проверьте интернет-соединение.');
+                    return false;
                 }
             }
-            
+
+            async function testDownload() {
+                updateStatus('Тестирование скорости скачивания: загрузка тестового файла...');
+                updateProgress(30, 'Тестирование скачивания');
+                
+                const testFiles = [
+                    { size: 1, url: "https://speedtest.selectel.ru/1MB" },
+                    { size: 5, url: "https://speedtest.selectel.ru/5MB" },
+                    { size: 10, url: "https://speedtest.selectel.ru/10MB" }
+                ];
+                
+                let maxSpeed = 0;
+                let totalBytes = 0;
+                let startTime = 0;
+                
+                for (const file of testFiles) {
+                    try {
+                        updateStatus(`Тестирование скачивания: файл ${file.size}MB...`);
+                        
+                        const response = await fetch(file.url, {
+                            cache: 'no-store',
+                            mode: 'no-cors'
+                        });
+                        
+                        if (!response.ok) throw new Error('Network response was not ok');
+                        
+                        const reader = response.body.getReader();
+                        const contentLength = +response.headers.get('content-length') || file.size * 1048576;
+                        startTime = performance.now();
+                        let bytesReceived = 0;
+                        
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            
+                            bytesReceived += value.length;
+                            totalBytes += value.length;
+                            const currentTime = performance.now();
+                            const elapsedTime = (currentTime - startTime) / 1000;
+                            const currentSpeed = (bytesReceived * 8) / (elapsedTime * 1000000);
+                            
+                            if (currentSpeed > maxSpeed) {
+                                maxSpeed = currentSpeed;
+                            }
+                            
+                            const speed = Math.round(currentSpeed * 10) / 10;
+                            elements.downloadSpeed.textContent = speed;
+                            updateNeedle(speed);
+                            
+                            const percent = Math.min(bytesReceived / contentLength * 100, 100);
+                            updateProgress(30 + percent * 0.4, `Скачивание: ${speed} Мбит/с`);
+                            
+                            await new Promise(resolve => setTimeout(resolve, 10));
+                        }
+                    } catch (e) {
+                        console.error('Download test failed:', e);
+                        showError(`Ошибка при скачивании тестового файла ${file.size}MB: ${e.message}`);
+                        return false;
+                    }
+                }
+                
+                testResults.download = Math.round(maxSpeed * 10) / 10;
+                elements.downloadSpeed.textContent = testResults.download;
+                
+                if (testResults.download < 5) {
+                    elements.downloadDescription.textContent = 'Очень медленно (могут быть проблемы с видео)';
+                } else if (testResults.download < 20) {
+                    elements.downloadDescription.textContent = 'Достаточно для HD видео';
+                } else if (testResults.download < 50) {
+                    elements.downloadDescription.textContent = 'Хорошо для 4K видео';
+                } else {
+                    elements.downloadDescription.textContent = 'Отлично для любых задач';
+                }
+                
+                return true;
+            }
+
+            async function testUpload() {
+                updateStatus('Тестирование скорости загрузки: отправка данных на сервер...');
+                updateProgress(70, 'Тестирование загрузки');
+                
+                const testSizes = [0.5, 1, 2]; // MB
+                let maxSpeed = 0;
+                
+                for (const size of testSizes) {
+                    try {
+                        updateStatus(`Тестирование загрузки: отправка ${size}MB данных...`);
+                        
+                        const testData = new Uint8Array(size * 1048576).fill(0);
+                        const formData = new FormData();
+                        formData.append('file', new Blob([testData]), 'test.bin');
+                        
+                        const startTime = performance.now();
+                        let bytesSent = 0;
+                        
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('POST', 'https://httpbin.org/post', true);
+                        
+                        await new Promise((resolve, reject) => {
+                            xhr.upload.onprogress = (event) => {
+                                bytesSent = event.loaded;
+                                const currentTime = performance.now();
+                                const elapsedTime = (currentTime - startTime) / 1000;
+                                const currentSpeed = (bytesSent * 8) / (elapsedTime * 1000000);
+                                
+                                if (currentSpeed > maxSpeed) {
+                                    maxSpeed = currentSpeed;
+                                }
+                                
+                                const speed = Math.round(currentSpeed * 10) / 10;
+                                elements.uploadSpeed.textContent = speed;
+                                updateNeedle(speed);
+                                
+                                const percent = 70 + (bytesSent / testData.length * 30);
+                                updateProgress(percent, `Загрузка: ${speed} Мбит/с`);
+                            };
+                            
+                            xhr.onload = resolve;
+                            xhr.onerror = () => reject(new Error('Upload failed'));
+                            xhr.send(formData);
+                        });
+                    } catch (e) {
+                        console.error('Upload test failed:', e);
+                        showError(`Ошибка при загрузке тестовых данных ${size}MB: ${e.message}`);
+                        return false;
+                    }
+                }
+                
+                testResults.upload = Math.round(maxSpeed * 10) / 10;
+                elements.uploadSpeed.textContent = testResults.upload;
+                
+                if (testResults.upload < 1) {
+                    elements.uploadDescription.textContent = 'Очень медленно (проблемы с видео-звонками)';
+                } else if (testResults.upload < 5) {
+                    elements.uploadDescription.textContent = 'Достаточно для видеозвонков';
+                } else if (testResults.upload < 20) {
+                    elements.uploadDescription.textContent = 'Хорошо для стриминга';
+                } else {
+                    elements.uploadDescription.textContent = 'Отлично для профессионального использования';
+                }
+                
+                return true;
+            }
+
             // Обработчик кнопки тестирования
-            startButton.addEventListener('click', async function() {
+            elements.startButton.addEventListener('click', async function() {
                 if (testInProgress) return;
                 
                 testInProgress = true;
-                startButton.disabled = true;
-                startButton.textContent = 'Тестирование...';
+                elements.startButton.disabled = true;
+                elements.startButton.textContent = 'Тестирование...';
+                hideError();
                 
                 // Сброс значений
-                downloadSpeedElement.textContent = '0';
-                uploadSpeedElement.textContent = '0';
-                pingValueElement.textContent = '0';
-                needle.style.transform = 'rotate(-90deg)';
+                elements.downloadSpeed.textContent = '-';
+                elements.uploadSpeed.textContent = '-';
+                elements.pingValue.textContent = '-';
+                elements.needle.style.transform = 'rotate(-90deg)';
+                updateProgress(0, 'Подготовка к тесту');
                 
-                // Последовательное выполнение тестов
-                await testPing();
-                await testDownload();
-                await testUpload();
-                
-                // Завершение теста
-                startButton.textContent = 'Повторить тест';
-                startButton.disabled = false;
-                testInProgress = false;
-                progressBar.style.width = '100%';
-                
-                // Устанавливаем стрелку на среднее значение
-                const avgSpeed = (downloadSpeed + uploadSpeed) / 2;
-                updateNeedle(avgSpeed);
+                try {
+                    // Последовательное выполнение тестов
+                    if (!await testPing()) return;
+                    if (!await testDownload()) return;
+                    if (!await testUpload()) return;
+                    
+                    // Оценка качества соединения
+                    evaluateConnectionQuality();
+                    updateStatus('Тестирование завершено! Вот ваши результаты:');
+                    updateProgress(100, 'Тестирование завершено');
+                    
+                    // Формирование итогового сообщения
+                    let summary = `Ваше интернет-соединение:\n`;
+                    summary += `• Ping: ${testResults.ping} мс\n`;
+                    summary += `• Скачивание: ${testResults.download} Мбит/с\n`;
+                    summary += `• Загрузка: ${testResults.upload} Мбит/с\n`;
+                    summary += `• Качество: ${elements.qualityText.textContent}`;
+                    
+                    updateStatus(summary);
+                } catch (e) {
+                    console.error('Test failed:', e);
+                    showError(`Критическая ошибка во время тестирования: ${e.message}`);
+                } finally {
+                    elements.startButton.textContent = 'Повторить тест';
+                    elements.startButton.disabled = false;
+                    testInProgress = false;
+                }
             });
         });
     </script>
